@@ -1,0 +1,28 @@
+package:
+  name: py_kernel_regression
+  version: 0.0.1
+
+source:
+  path: ../py-kernel-regression
+
+build:
+  script: maturin build --release -i "{{ PYTHON }}" --manylinux off
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - wheel
+    - rust
+    - maturin
+  run:
+    - python
+    - numpy
+    - pandas
+    - statsmodels
+    # Add more dependencies if needed
+
+about:
+  home: https://github.com/marki259/kernel_regression
+  license: MIT
+  summary: 'A brief description of your module'

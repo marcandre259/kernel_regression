@@ -15,7 +15,7 @@ Y_train = np.array([9., 9., 10., 3., 4.])
 
 x_new = np.array([[1.0, 2.0], [2.2, 3.0], [2.6, 2.0]])
 
-x_new = np.repeat(x_new, 10000, axis=0)
+x_new = np.repeat(x_new, 1000, axis=0)
 
 def main():
     start_time = time.time()

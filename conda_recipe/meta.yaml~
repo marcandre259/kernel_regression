@@ -1,0 +1,27 @@
+package:
+  name: mymodule
+  version: 1.0.0
+
+source:
+  path: ../path/to/your/module
+
+build:
+  script: maturin build --release -i "{{ PYTHON }}" --manylinux off
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - wheel
+    - rust
+    - maturin
+  run:
+    - python
+    - dependency1
+    - dependency2
+    # Add more dependencies if needed
+
+about:
+  home: https://github.com/yourusername/mymodule
+  license: MIT
+  summary: 'A brief description of your module'
