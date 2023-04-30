@@ -51,6 +51,13 @@ fn gpke(bw: Vec<f64>, data: Array2<f64>, data_predict: Array1<f64>, var_type: Ve
     kval.fold_axis(Axis(1), 1.0, |acc, &x| acc * x)
 }
 
+fn est_loc_constant(bw: Vec<f64>, data_endog: Array1<f64>, data_exog: Array2<f64>, data_predict: Array1<f64>, var_type: Vec<&str>) -> f64 {
+    let kernel_products = gpke(bw, data_exog, data_predict, var_type);
+    let loc_num = (data_endog * kernel_products.view()).sum();
+    let loc_denom = kernel_products.sum();
+    loc_num/loc_denom
+}
+
 
 fn main() {
     let bw = vec![1.0, 0.2];
@@ -60,7 +67,11 @@ fn main() {
 
     let var_type = vec!["c", "u"];
 
-    let output = gpke(bw, x_train, x_new, var_type);
+    let y_train = array![9., 9., 10., 3., 4.];
+
+    // let output = gpke(bw, x_train, x_new, var_type);
+
+    let output = est_loc_constant(bw, y_train, x_train, x_new, var_type);
 
     println!("{:#?}", output)
 }
