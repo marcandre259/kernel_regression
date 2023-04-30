@@ -60,11 +60,11 @@ pub fn est_loc_constant(
     data_exog: ArrayView2<f64>,
     data_predict: ArrayView1<f64>,
     var_type: Vec<&str>,
-) -> f64 {
+) -> PyResult<f64> {
     let kernel_products = gpke(bw, data_exog, data_predict, var_type);
     let loc_num = (data_endog.to_owned() * kernel_products.view()).sum();
     let loc_denom = kernel_products.sum();
-    loc_num / loc_denom
+    Ok(loc_num / loc_denom)
 }
 
 #[pyfunction]
@@ -87,7 +87,7 @@ pub unsafe fn loc_constant_fit(
     for i in 0..n_predict {
         let slice_predict = data_predict.slice(s![i, ..]);
         let local_mean =
-            est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone());
+            est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())?;
         local_means.push(local_mean);
     }
 
@@ -95,7 +95,7 @@ pub unsafe fn loc_constant_fit(
 }
 
 #[pymodule]
-fn py_kernel_regression(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn py_kernel_regression(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(loc_constant_fit, m)?)?;
     Ok(())
 }
