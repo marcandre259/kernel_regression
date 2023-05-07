@@ -1,5 +1,6 @@
 {
     "rust-analyzer.linkedProjects": [
-        "./py-kernel-regression/Cargo.toml"
+        "./py-kernel-regression/Cargo.toml",
+        "./Cargo.toml",
     ]
 }

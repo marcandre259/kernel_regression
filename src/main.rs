@@ -1,5 +1,5 @@
-use ndarray::{array};
 use kernel_regression::kr::loc_constant_fit;
+use ndarray::array;
 
 fn main() {
     let bw = vec![1.0, 0.2];
