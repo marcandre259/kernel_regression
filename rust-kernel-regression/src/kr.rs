@@ -1,4 +1,3 @@
-use ndarray::linalg::*;
 use ndarray::prelude::*;
 use ndarray_linalg::SVD;
 use std::f64::consts::PI;

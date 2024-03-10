@@ -361,6 +361,7 @@ dependencies = [
  "pyo3",
  "rand_chacha 0.3.1",
  "rstat",
+ "rust-kernel-regression",
 ]
 
 [[package]]
@@ -1071,6 +1072,20 @@ dependencies = [
  "rand_distr 0.2.2",
  "spaces",
  "special-fun",
+]
+
+[[package]]
+name = "rust-kernel-regression"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "ndarray 0.15.6",
+ "ndarray-linalg",
+ "ndarray-rand",
+ "ndarray-stats",
+ "pyo3",
+ "rand_chacha 0.3.1",
+ "rstat",
 ]
 
 [[package]]

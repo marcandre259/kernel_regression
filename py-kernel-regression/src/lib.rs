@@ -1,58 +1,9 @@
 use ndarray::prelude::*;
 use numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::types::{PyList, PyString};
+use rust_kernel_regression::kr::{gpke, mp_inverse};
 use std::f64::consts::PI;
-
-pub fn gaussian_kernel(h: f64, x_input: ArrayView1<f64>, x_new: f64) -> Array1<f64> {
-    // For continuous variables
-    let constant: f64 = 1.0 / (2.0 * PI).sqrt();
-    let scale: f64 = h.powf(2.0) * 2.0;
-    x_input.mapv(|x: f64| constant * (-1.0 * (x - x_new).powf(2.0) / scale).exp())
-}
-
-pub fn aitchison_aitken_kernel(h: f64, x_input: ArrayView1<f64>, x_new: f64) -> Array1<f64> {
-    // For unordered discrete variables
-    let num_levels = x_input.clone();
-    let mut num_levels: Vec<i64> = num_levels.to_vec().iter_mut().map(|x| *x as i64).collect();
-    num_levels.sort();
-    num_levels.dedup();
-    let num_levels = num_levels.len() as f64;
-
-    let kernel_values = x_input.mapv(|x| {
-        if x == x_new {
-            1.0 - h
-        } else {
-            h / (num_levels - 1.0)
-        }
-    });
-    kernel_values
-}
-
-pub fn gpke(
-    bw: &Vec<f64>,
-    data: ArrayView2<f64>,
-    data_predict: ArrayView1<f64>,
-    var_type: Vec<&str>,
-) -> Array1<f64> {
-    let mut kval = data.to_owned().clone();
-    for (i, vtype) in var_type.into_iter().enumerate() {
-        let data_arr = kval.slice(s![.., i]);
-        let data_new = data_predict.slice(s![i]).into_scalar();
-        let h = bw[i];
-        let kcolumn = match vtype {
-            "c" => gaussian_kernel(h, data_arr, *data_new),
-            "u" => aitchison_aitken_kernel(h, data_arr, *data_new),
-            _ => {
-                // Convoluted way to get an array of ones with the expected dimensionality
-                let ones = gaussian_kernel(h, data_arr, *data_new);
-                ones.mapv(|_| 1.0)
-            }
-        };
-        kval.slice_mut(s![.., i]).assign(&kcolumn);
-    }
-    kval.fold_axis(Axis(1), 1.0, |acc, &x| acc * x)
-}
 
 pub fn est_loc_constant(
     bw: &Vec<f64>,
@@ -88,6 +39,117 @@ pub unsafe fn loc_constant_fit(
         let slice_predict = data_predict.slice(s![i, ..]);
         let local_mean =
             est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())?;
+        local_means.push(local_mean);
+    }
+
+    Ok(local_means)
+}
+
+pub fn est_loc_linear(
+    bw: &Vec<f64>,
+    data_endog: ArrayView1<f64>,
+    data_exog: ArrayView2<f64>,
+    data_predict: ArrayView1<f64>,
+    var_type: Vec<&str>,
+) -> PyResult<f64> {
+    let exog_shape = data_exog.shape();
+    let kernel_products = gpke(bw, data_exog, data_predict, var_type);
+    let data_exog = data_exog.to_owned();
+
+    let data_predict = data_predict.to_owned().insert_axis(Axis(0));
+
+    // We basically take p. 38 from Nonparametric Econometrics: A Primer as a starting point for
+    // a block matrix
+    let data_predict_broadcast = data_predict.broadcast(exog_shape).unwrap().to_owned();
+    let kernel_products_broadcast = kernel_products
+        .view()
+        .insert_axis(Axis(1))
+        .broadcast(exog_shape)
+        .unwrap()
+        .to_owned();
+
+    let m12 = data_exog - data_predict_broadcast;
+
+    let m12_k: Array2<f64> = (m12.clone() * kernel_products_broadcast)
+        .to_owned()
+        .into_dimensionality::<Ix2>()
+        .unwrap();
+
+    let m12_t: Array2<f64> = m12.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+
+    let m22: Array2<f64> = m12_t.dot(&m12_k);
+    let m12: Array2<f64> = m12_k.sum_axis(Axis(0)).insert_axis(Axis(0));
+
+    // Defining the block m matrix
+    let mut m: Array2<f64> = Array::<f64, _>::zeros((exog_shape[1] + 1, exog_shape[1] + 1))
+        .into_dimensionality::<Ix2>()
+        .unwrap();
+
+    m.slice_mut(s![0, 0])
+        .assign(&kernel_products.sum_axis(Axis(0)));
+
+    m.slice_mut(s![0, 1..])
+        .assign(&m12.clone().into_shape((exog_shape[1],)).unwrap());
+
+    m.slice_mut(s![1.., 0])
+        .assign(&m12.clone().into_shape((exog_shape[1],)).unwrap());
+
+    m.slice_mut(s![1.., 1..]).assign(&m22);
+
+    let kernel_endog = kernel_products * data_endog;
+
+    let mut v: Array2<f64> = Array::<f64, _>::zeros((exog_shape[1] + 1, 1))
+        .into_dimensionality::<Ix2>()
+        .unwrap();
+
+    v.slice_mut(s![0, 0])
+        .assign(&kernel_endog.sum_axis(Axis(0)));
+
+    v.slice_mut(s![1.., 0])
+        .assign(&m12.into_shape((exog_shape[1],)).unwrap());
+
+    let est = mp_inverse(&m)
+        .dot(&v)
+        .slice(s![0, 0])
+        .to_owned()
+        .into_scalar();
+
+    Ok(est)
+}
+
+// Keep the loc_constant_fit for legacy reasons
+#[pyfunction]
+pub unsafe fn fit_predict(
+    _py: Python,
+    bw: &PyList,
+    data_endog: &PyArray1<f64>,
+    data_exog: &PyArray2<f64>,
+    data_predict: &PyArray2<f64>,
+    var_type: &PyList,
+    reg_type: Option<&PyString>,
+) -> PyResult<Vec<f64>> {
+    let bw: Vec<f64> = bw.extract()?;
+    let data_endog = data_endog.as_array();
+    let data_exog = data_exog.as_array();
+    let data_predict = data_predict.as_array();
+    let var_type: Vec<&str> = var_type.extract()?;
+    let reg_type = reg_type.unwrap_or(PyString::new(_py, "loc_constant"));
+
+    let n_predict = data_predict.len_of(Axis(0));
+    let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
+
+    for i in 0..n_predict {
+        let slice_predict = data_predict.slice(s![i, ..]);
+
+        let local_mean = match reg_type.to_str()? {
+            "loc_constant" => {
+                est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
+            }
+            "loc_linear" => {
+                est_loc_linear(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
+            }
+            _ => panic!("Invalid regression type"),
+        };
         local_means.push(local_mean);
     }
 

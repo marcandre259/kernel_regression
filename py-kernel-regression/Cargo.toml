@@ -9,6 +9,7 @@ name = "py_kernel_regression"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = "0.18.1"
+pyo3 = "0.20.3"
 ndarray = "0.15"
-numpy = "0.18"
+numpy = "0.20"
+rust-kernel-regression = { path = "../rust-kernel-regression" }
