@@ -1,3 +1,4 @@
+use ndarray::linalg::*;
 use ndarray::prelude::*;
 use std::f64::consts::PI;
 
@@ -104,19 +105,12 @@ pub fn est_loc_linear(
     // a block matrix
     let data_predict_broadcast = data_predict.broadcast(exog_shape).unwrap().to_owned();
     let kernel_products_broadcast = kernel_products
+        .view()
         .insert_axis(Axis(1))
         .broadcast(exog_shape)
         .unwrap()
         .to_owned();
 
-    // Statsmodels reference code
-    //        M22 = np.dot(M12.T, M12 * ker)
-    //        M12 = (M12 * ker).sum(axis=0)
-    //        M = np.empty((k_vars + 1, k_vars + 1))
-    //        M[0, 0] = ker.sum()
-    //        M[0, 1:] = M12
-    //        M[1:, 0] = M12
-    //        M[1:, 1:] = M22
     let m12 = data_exog - data_predict_broadcast;
 
     let m12_k: Array2<f64> = (m12.clone() * kernel_products_broadcast)
@@ -126,11 +120,58 @@ pub fn est_loc_linear(
 
     let m12_t: Array2<f64> = m12.t().to_owned().into_dimensionality::<Ix2>().unwrap();
 
-    let m12: Array2<f64> = m12_t.dot(&m12_k);
+    let m22: Array2<f64> = m12_t.dot(&m12_k);
+    let m12: Array2<f64> = m12_k.sum_axis(Axis(0)).insert_axis(Axis(0));
 
-    println!("{:?}", m12);
+    // Defining the block m matrix
+    let mut m: Array2<f64> = Array::<f64, _>::zeros((exog_shape[1] + 1, exog_shape[1] + 1))
+        .into_dimensionality::<Ix2>()
+        .unwrap();
+
+    m.slice_mut(s![0, 0])
+        .assign(&kernel_products.sum_axis(Axis(0)));
+
+    m.slice_mut(s![0, 1..])
+        .assign(&m12.clone().into_shape((exog_shape[1],)).unwrap());
+
+    m.slice_mut(s![1.., 0])
+        .assign(&m12.clone().into_shape((exog_shape[1],)).unwrap());
+
+    m.slice_mut(s![1.., 1..]).assign(&m22);
+
+    //        ker_endog = ker * endog
+    //        V = np.empty((k_vars + 1, 1))
+    //        V[0, 0] = ker_endog.sum()
+    //        V[1:, 0] = ((exog - data_predict) * ker_endog).sum(axis=0)
+    //
+    //        mean_mfx = np.dot(np.linalg.pinv(M), V)
+    //        mean = mean_mfx[0]
+    //        mfx = mean_mfx[1:, :]
+    //        return mean, mfx
+
+    let kernel_endog = kernel_products * data_endog;
+
+    let mut v: Array2<f64> = Array::<f64, _>::zeros((exog_shape[1] + 1, 1))
+        .into_dimensionality::<Ix2>()
+        .unwrap();
+
+    v.slice_mut(s![0, 0])
+        .assign(&kernel_endog.sum_axis(Axis(0)));
+
+    v.slice_mut(s![1.., 0])
+        .assign(&m12.into_shape((exog_shape[1],)).unwrap());
+
+    println!("{:?}", v);
 
     return 0.0;
+}
+
+fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {
+    let m = m.to_owned();
+    m.svd();
+
+    let m_inv = m.inv().unwrap();
+    m_inv
 }
 
 // Create a KernelReg struct
