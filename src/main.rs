@@ -1,4 +1,4 @@
-use kernel_regression::kr::{est_loc_linear, loc_constant_fit};
+use kernel_regression::kr::{est_loc_linear, loc_constant_fit, mp_inverse};
 use ndarray::{array, s};
 
 fn main() {
@@ -16,6 +16,12 @@ fn main() {
     // let output = est_loc_constant(&bw, y_train.view(), x_train.view(), x_new.view(), var_type);
 
     // let output = loc_constant_fit(&bw, y_train.view(), x_train.view(), x_new.view(), var_type);
+    //
+
+    // let output = mp_inverse(&x_train.dot(&x_train.t()));
+
+    // println!("{:#?}", output);
+
     let output = est_loc_linear(
         &bw,
         y_train.view(),
@@ -24,5 +30,5 @@ fn main() {
         var_type,
     );
 
-    println!("{:#?}", output)
+    println!("{:#?}", output);
 }

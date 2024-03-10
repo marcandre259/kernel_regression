@@ -1,5 +1,6 @@
 use ndarray::linalg::*;
 use ndarray::prelude::*;
+use ndarray_linalg::SVD;
 use std::f64::consts::PI;
 
 pub fn gaussian_kernel(h: f64, x_input: ArrayView1<f64>, x_new: f64) -> Array1<f64> {
@@ -161,17 +162,29 @@ pub fn est_loc_linear(
     v.slice_mut(s![1.., 0])
         .assign(&m12.into_shape((exog_shape[1],)).unwrap());
 
-    println!("{:?}", v);
+    let est = mp_inverse(&m)
+        .dot(&v)
+        .slice(s![0, 0])
+        .to_owned()
+        .into_scalar();
 
-    return 0.0;
+    est
 }
 
-fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {
+pub fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {
     let m = m.to_owned();
-    m.svd();
 
-    let m_inv = m.inv().unwrap();
-    m_inv
+    let svd = m.svd(true, true).unwrap();
+    let (u, s, vt) = (svd.0.unwrap(), svd.1, svd.2.unwrap());
+
+    // Check threshold for small singular values
+    let threshold = 1e-10;
+
+    let s_inv = Array::from_diag(&s.mapv(|x| if x > threshold { 1.0 / x } else { 0.0 }));
+
+    let m_pinv = vt.t().dot(&s_inv).dot(&u.t());
+
+    m_pinv
 }
 
 // Create a KernelReg struct
