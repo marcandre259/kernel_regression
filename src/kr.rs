@@ -26,6 +26,7 @@ pub fn aitchison_aitken_kernel(h: f64, x_input: ArrayView1<f64>, x_new: f64) -> 
     kernel_values
 }
 
+// We compute the generalized kernel weight with a single slice from the data to predict
 pub fn gpke(
     bw: &Vec<f64>,
     data: ArrayView2<f64>,
@@ -64,6 +65,7 @@ pub fn est_loc_constant(
     loc_num / loc_denom
 }
 
+// For now keep this for compatibility
 pub fn loc_constant_fit(
     bw: &Vec<f64>,
     data_endog: ArrayView1<f64>,
@@ -83,3 +85,57 @@ pub fn loc_constant_fit(
 
     local_means
 }
+
+// Implement local linear regression
+pub fn est_loc_linear(
+    bw: &Vec<f64>,
+    data_endog: ArrayView1<f64>,
+    data_exog: ArrayView2<f64>,
+    data_predict: ArrayView1<f64>,
+    var_type: Vec<&str>,
+) -> f64 {
+    let exog_shape = data_exog.shape();
+    let kernel_products = gpke(bw, data_exog, data_predict, var_type);
+    let data_exog = data_exog.to_owned();
+
+    let data_predict = data_predict.to_owned().insert_axis(Axis(0));
+
+    // We basically take p. 38 from Nonparametric Econometrics: A Primer as a starting point for
+    // a block matrix
+    let data_predict_broadcast = data_predict.broadcast(exog_shape).unwrap().to_owned();
+    let kernel_products_broadcast = kernel_products
+        .insert_axis(Axis(1))
+        .broadcast(exog_shape)
+        .unwrap()
+        .to_owned();
+
+    // Statsmodels reference code
+    //        M22 = np.dot(M12.T, M12 * ker)
+    //        M12 = (M12 * ker).sum(axis=0)
+    //        M = np.empty((k_vars + 1, k_vars + 1))
+    //        M[0, 0] = ker.sum()
+    //        M[0, 1:] = M12
+    //        M[1:, 0] = M12
+    //        M[1:, 1:] = M22
+    let m12 = data_exog - data_predict_broadcast;
+
+    let m12_k: Array2<f64> = (m12.clone() * kernel_products_broadcast)
+        .to_owned()
+        .into_dimensionality::<Ix2>()
+        .unwrap();
+
+    let m12_t: Array2<f64> = m12.t().to_owned().into_dimensionality::<Ix2>().unwrap();
+
+    let m12: Array2<f64> = m12_t.dot(&m12_k);
+
+    println!("{:?}", m12);
+
+    return 0.0;
+}
+
+// Create a KernelReg struct
+
+// Implement a fit method for the KernelReg struct
+
+// Got to add a ridge penalty
+// Adapt it to limits of the time-series data

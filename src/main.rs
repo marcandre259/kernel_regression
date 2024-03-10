@@ -1,5 +1,5 @@
-use kernel_regression::kr::loc_constant_fit;
-use ndarray::array;
+use kernel_regression::kr::{est_loc_linear, loc_constant_fit};
+use ndarray::{array, s};
 
 fn main() {
     let bw = vec![1.0, 0.2];
@@ -15,7 +15,14 @@ fn main() {
 
     // let output = est_loc_constant(&bw, y_train.view(), x_train.view(), x_new.view(), var_type);
 
-    let output = loc_constant_fit(&bw, y_train.view(), x_train.view(), x_new.view(), var_type);
+    // let output = loc_constant_fit(&bw, y_train.view(), x_train.view(), x_new.view(), var_type);
+    let output = est_loc_linear(
+        &bw,
+        y_train.view(),
+        x_train.view(),
+        x_new.view().slice(s![0, ..]),
+        var_type,
+    );
 
     println!("{:#?}", output)
 }

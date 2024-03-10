@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 ndarray = "0.15"
-pyo3 = "0.18.1"
+pyo3 = "0.20.3"
 rstat = "0.6"
 rand_chacha = "0.3.1"
 ndarray-rand = "0.14.0"
