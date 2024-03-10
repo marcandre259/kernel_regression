@@ -139,16 +139,6 @@ pub fn est_loc_linear(
 
     m.slice_mut(s![1.., 1..]).assign(&m22);
 
-    //        ker_endog = ker * endog
-    //        V = np.empty((k_vars + 1, 1))
-    //        V[0, 0] = ker_endog.sum()
-    //        V[1:, 0] = ((exog - data_predict) * ker_endog).sum(axis=0)
-    //
-    //        mean_mfx = np.dot(np.linalg.pinv(M), V)
-    //        mean = mean_mfx[0]
-    //        mfx = mean_mfx[1:, :]
-    //        return mean, mfx
-
     let kernel_endog = kernel_products * data_endog;
 
     let mut v: Array2<f64> = Array::<f64, _>::zeros((exog_shape[1] + 1, 1))

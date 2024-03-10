@@ -34,10 +34,23 @@ def main():
     print(f"Time taken with Python (loc constant fit): {delta} seconds")
 
     start_time = time.time()
+    kr_model = KernelReg(Y_train, X_train, "cu", "ll", np.array(bw))
+    _, _ = kr_model.fit(x_new)
+    end_time = time.time()
+    delta = end_time - start_time
+    print(f"Time taken with Python (loc linear fit): {delta} seconds")
+
+    start_time = time.time()
     ll_output = fit_predict(bw, Y_train, X_train, x_new, ["c", "u"], "loc_linear")
     end_time = time.time()
     delta = end_time - start_time
     print(f"Time taken with Rust (loc_linear_fit): {delta} seconds")
+
+    start_time = time.time()
+    lc_output = fit_predict(bw, Y_train, X_train, x_new, ["c", "u"], "loc_constant")
+    end_time = time.time()
+    delta = end_time - start_time
+    print(f"Time taken with Rust (loc_constant_fit): {delta} seconds")
 
 
 if __name__ == "__main__":
