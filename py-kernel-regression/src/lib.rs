@@ -159,5 +159,6 @@ pub unsafe fn fit_predict(
 #[pymodule]
 fn py_kernel_regression(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(loc_constant_fit, m)?)?;
+    m.add_function(wrap_pyfunction!(fit_predict, m)?)?;
     Ok(())
 }
