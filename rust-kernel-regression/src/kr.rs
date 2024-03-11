@@ -96,14 +96,20 @@ pub fn est_loc_linear(
     var_type: Vec<&str>,
 ) -> f64 {
     let exog_shape = data_exog.shape();
-    let kernel_products = gpke(bw, data_exog, data_predict, var_type);
+    let kernel_products = gpke(bw, data_exog, data_predict, var_type) / (exog_shape[0] as f64);
     let data_exog = data_exog.to_owned();
 
     let data_predict = data_predict.to_owned().insert_axis(Axis(0));
 
+    println!("Data predict:\n{:#?}\n", data_predict);
+    println!("Kernel products:\n{:#?}\n", kernel_products);
+
     // We basically take p. 38 from Nonparametric Econometrics: A Primer as a starting point for
     // a block matrix
     let data_predict_broadcast = data_predict.broadcast(exog_shape).unwrap().to_owned();
+
+    println!("Data predict broadcast:\n{:#?}", data_predict_broadcast);
+
     let kernel_products_broadcast = kernel_products
         .view()
         .insert_axis(Axis(1))
@@ -111,7 +117,7 @@ pub fn est_loc_linear(
         .unwrap()
         .to_owned();
 
-    let m12 = data_exog - data_predict_broadcast;
+    let m12 = data_exog.clone() - data_predict_broadcast.clone();
 
     let m12_k: Array2<f64> = (m12.clone() * kernel_products_broadcast)
         .to_owned()
@@ -139,6 +145,8 @@ pub fn est_loc_linear(
 
     m.slice_mut(s![1.., 1..]).assign(&m22);
 
+    println!("m matrix:\n{:#?}", m);
+
     let kernel_endog = kernel_products * data_endog;
 
     let mut v: Array2<f64> = Array::<f64, _>::zeros((exog_shape[1] + 1, 1))
@@ -148,8 +156,17 @@ pub fn est_loc_linear(
     v.slice_mut(s![0, 0])
         .assign(&kernel_endog.sum_axis(Axis(0)));
 
+    let v_assign = ((data_exog - data_predict_broadcast)
+        * kernel_endog
+            .insert_axis(Axis(1))
+            .broadcast(exog_shape)
+            .unwrap())
+    .sum_axis(Axis(0));
+
     v.slice_mut(s![1.., 0])
-        .assign(&m12.into_shape((exog_shape[1],)).unwrap());
+        .assign(&v_assign.into_shape((exog_shape[1],)).unwrap());
+
+    println!("v matrix:\n{:#?}", v);
 
     let est = mp_inverse(&m)
         .dot(&v)

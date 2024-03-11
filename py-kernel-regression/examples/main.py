@@ -16,7 +16,7 @@ Y_train = np.array([9.0, 9.0, 10.0, 3.0, 4.0])
 x_new = np.array([[1.0, 2.0], [2.2, 3.0], [2.6, 2.0]])
 
 # Set to a pretty large number to compare the performance
-x_new = np.repeat(x_new, 1000, axis=0)
+# x_new = np.repeat(x_new, 1000, axis=0)
 
 
 def main():
@@ -26,16 +26,18 @@ def main():
     delta = end_time - start_time
     print(f"Time taken with Rust (loc_constant_fit): {delta} seconds")
 
-    start_time = time.time()
-    kr_model = KernelReg(Y_train, X_train, "cu", "lc", np.array(bw))
-    _, _ = kr_model.fit(x_new)
-    end_time = time.time()
-    delta = end_time - start_time
-    print(f"Time taken with Python (loc constant fit): {delta} seconds")
+    #    start_time = time.time()
+    #    kr_model = KernelReg(Y_train, X_train, "cu", "lc", np.array(bw))
+    #    _, _ = kr_model.fit(x_new)
+    #    end_time = time.time()
+    #    delta = end_time - start_time
+    #    print(f"Time taken with Python (loc constant fit): {delta} seconds")
 
     start_time = time.time()
-    kr_model = KernelReg(Y_train, X_train, "cu", "ll", np.array(bw))
-    _, _ = kr_model.fit(x_new)
+    kr_model = KernelReg(
+        Y_train, X_train, var_type="cu", reg_type="ll", bw=np.array(bw)
+    )
+    ll_mn, _ = kr_model.fit(x_new)
     end_time = time.time()
     delta = end_time - start_time
     print(f"Time taken with Python (loc linear fit): {delta} seconds")
@@ -51,6 +53,8 @@ def main():
     end_time = time.time()
     delta = end_time - start_time
     print(f"Time taken with Rust (loc_constant_fit): {delta} seconds")
+
+    print()
 
 
 if __name__ == "__main__":

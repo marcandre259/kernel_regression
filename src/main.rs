@@ -1,5 +1,5 @@
 use ndarray::{array, s};
-use rust_kernel_regression::kr::{est_loc_linear, loc_constant_fit, mp_inverse};
+use rust_kernel_regression::kr::est_loc_linear;
 
 fn main() {
     let bw = vec![1.0, 0.2];
