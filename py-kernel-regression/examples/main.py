@@ -26,12 +26,12 @@ def main():
     delta = end_time - start_time
     print(f"Time taken with Rust (loc_constant_fit): {delta} seconds")
 
-    #    start_time = time.time()
-    #    kr_model = KernelReg(Y_train, X_train, "cu", "lc", np.array(bw))
-    #    _, _ = kr_model.fit(x_new)
-    #    end_time = time.time()
-    #    delta = end_time - start_time
-    #    print(f"Time taken with Python (loc constant fit): {delta} seconds")
+    start_time = time.time()
+    kr_model = KernelReg(Y_train, X_train, "cu", "lc", np.array(bw))
+    _, _ = kr_model.fit(x_new)
+    end_time = time.time()
+    delta = end_time - start_time
+    print(f"Time taken with Python (loc constant fit): {delta} seconds")
 
     start_time = time.time()
     kr_model = KernelReg(
