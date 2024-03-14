@@ -101,14 +101,9 @@ pub fn est_loc_linear(
 
     let data_predict = data_predict.to_owned().insert_axis(Axis(0));
 
-    println!("Data predict:\n{:#?}\n", data_predict);
-    println!("Kernel products:\n{:#?}\n", kernel_products);
-
     // We basically take p. 38 from Nonparametric Econometrics: A Primer as a starting point for
     // a block matrix
     let data_predict_broadcast = data_predict.broadcast(exog_shape).unwrap().to_owned();
-
-    println!("Data predict broadcast:\n{:#?}", data_predict_broadcast);
 
     let kernel_products_broadcast = kernel_products
         .view()
@@ -144,8 +139,6 @@ pub fn est_loc_linear(
 
     m.slice_mut(s![1.., 1..]).assign(&m22);
 
-    println!("m matrix:\n{:#?}", m);
-
     let kernel_endog = kernel_products * data_endog;
 
     let mut v: Array2<f64> = Array::<f64, _>::zeros((exog_shape[1] + 1, 1))
@@ -172,6 +165,35 @@ pub fn est_loc_linear(
         .into_scalar();
 
     est
+}
+
+pub fn fit_predict(
+    bw: &Vec<f64>,
+    data_endog: ArrayView1<f64>,
+    data_exog: ArrayView2<f64>,
+    data_predict: ArrayView2<f64>,
+    var_type: Vec<&str>,
+    reg_type: &str,
+) -> Vec<f64> {
+    let n_predict = data_predict.len_of(Axis(0));
+    let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
+
+    for i in 0..n_predict {
+        let slice_predict = data_predict.slice(s![i, ..]);
+
+        let local_mean = match reg_type {
+            "loc_constant" => {
+                est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())
+            }
+            "loc_linear" => {
+                est_loc_linear(&bw, data_endog, data_exog, slice_predict, var_type.clone())
+            }
+            _ => panic!("Invalid regression type"),
+        };
+        local_means.push(local_mean);
+    }
+
+    local_means
 }
 
 pub fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {

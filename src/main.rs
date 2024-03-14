@@ -1,5 +1,5 @@
-use ndarray::{array, s};
-use rust_kernel_regression::kr::est_loc_linear;
+use ndarray::array;
+use rust_kernel_regression::kr::fit_predict;
 
 fn main() {
     let bw = vec![1.0, 0.2];
@@ -22,12 +22,21 @@ fn main() {
 
     // println!("{:#?}", output);
 
-    let output = est_loc_linear(
+    //    let output = est_loc_linear(
+    //        &bw,
+    //        y_train.view(),
+    //        x_train.view(),
+    //        x_new.view().slice(s![0, ..]),
+    //        var_type,
+    //    );
+    //
+    let output = fit_predict(
         &bw,
         y_train.view(),
         x_train.view(),
-        x_new.view().slice(s![0, ..]),
+        x_new.view(),
         var_type,
+        "loc_linear",
     );
 
     println!("{:#?}", output);
