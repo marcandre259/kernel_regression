@@ -1,6 +1,7 @@
-use ndarray::prelude::*;
+use ndarray::{prelude::*, stack};
 use ndarray_linalg::SVD;
-use std::f64::consts::PI;
+use std::error::Error;
+use std::{error::Error, f64::consts::PI};
 
 pub fn gaussian_kernel(h: f64, x_input: ArrayView1<f64>, x_new: f64) -> Array1<f64> {
     // For continuous variables
@@ -212,9 +213,23 @@ pub fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {
     m_pinv
 }
 
+fn exclude_index(array: &Array2<f64>, i: usize) -> Array2<f64> {
+    let start = array.slice(s![0..i, ..]);
+    let end = array.slice(s![(i + 1).., ..]);
+
+    let output_array = stack(Axis(0), &[start, end]).unwrap();
+    let output_array = output_array
+        .into_shape((array.shape()[0] - 1, array.shape()[1]))
+        .unwrap();
+
+    output_array
+}
+
 // Create a KernelReg struct
 
 // Implement a fit method for the KernelReg struct
 
 // Got to add a ridge penalty
 // Adapt it to limits of the time-series data
+
+// Once the LOO fits work, we can implement multi-processing
