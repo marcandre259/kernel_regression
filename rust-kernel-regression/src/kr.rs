@@ -1,7 +1,6 @@
 use ndarray::{prelude::*, stack};
 use ndarray_linalg::SVD;
-use std::error::Error;
-use std::{error::Error, f64::consts::PI};
+use std::f64::consts::PI;
 
 pub fn gaussian_kernel(h: f64, x_input: ArrayView1<f64>, x_new: f64) -> Array1<f64> {
     // For continuous variables
