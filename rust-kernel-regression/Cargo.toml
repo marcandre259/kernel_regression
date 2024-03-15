@@ -17,3 +17,4 @@ ndarray-rand = "0.14.0"
 ndarray-stats = "0.5.0"
 nalgebra = "0.32"
 ndarray-linalg = { version = "0.16.0", features = ["openblas"] }
+rayon = "1.9.0"

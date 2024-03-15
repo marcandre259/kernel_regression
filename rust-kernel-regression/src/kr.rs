@@ -1,5 +1,6 @@
 use ndarray::{prelude::*, stack};
 use ndarray_linalg::SVD;
+use rayon::prelude::*;
 use std::f64::consts::PI;
 
 pub fn gaussian_kernel(h: f64, x_input: ArrayView1<f64>, x_new: f64) -> Array1<f64> {
@@ -32,14 +33,14 @@ pub fn gpke(
     bw: &Vec<f64>,
     data: ArrayView2<f64>,
     data_predict: ArrayView1<f64>,
-    var_type: Vec<&str>,
+    var_type: Vec<String>,
 ) -> Array1<f64> {
     let mut kval = data.to_owned().clone();
     for (i, vtype) in var_type.into_iter().enumerate() {
         let data_arr = kval.slice(s![.., i]);
         let data_new = data_predict.slice(s![i]).into_scalar();
         let h = bw[i];
-        let kcolumn = match vtype {
+        let kcolumn = match vtype.as_str() {
             "c" => gaussian_kernel(h, data_arr, *data_new),
             "u" => aitchison_aitken_kernel(h, data_arr, *data_new),
             _ => {
@@ -53,12 +54,18 @@ pub fn gpke(
     kval.fold_axis(Axis(1), 1.0, |acc, &x| acc * x)
 }
 
+pub struct KernelReg {
+    bw: Vec<f64>,
+    var_type: Vec<String>,
+    reg_type: String,
+}
+
 pub fn est_loc_constant(
     bw: &Vec<f64>,
     data_endog: ArrayView1<f64>,
     data_exog: ArrayView2<f64>,
     data_predict: ArrayView1<f64>,
-    var_type: Vec<&str>,
+    var_type: Vec<String>,
 ) -> f64 {
     let kernel_products = gpke(bw, data_exog, data_predict, var_type);
     let loc_num = (data_endog.to_owned() * kernel_products.view()).sum();
@@ -72,7 +79,7 @@ pub fn loc_constant_fit(
     data_endog: ArrayView1<f64>,
     data_exog: ArrayView2<f64>,
     data_predict: ArrayView2<f64>,
-    var_type: Vec<&str>,
+    var_type: Vec<String>,
 ) -> Vec<f64> {
     let n_predict = data_predict.len_of(Axis(0));
     let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
@@ -93,7 +100,7 @@ pub fn est_loc_linear(
     data_endog: ArrayView1<f64>,
     data_exog: ArrayView2<f64>,
     data_predict: ArrayView1<f64>,
-    var_type: Vec<&str>,
+    var_type: Vec<String>,
 ) -> f64 {
     let exog_shape = data_exog.shape();
     let kernel_products = gpke(bw, data_exog, data_predict, var_type) / (exog_shape[0] as f64);
@@ -167,33 +174,50 @@ pub fn est_loc_linear(
     est
 }
 
-pub fn fit_predict(
-    bw: &Vec<f64>,
-    data_endog: ArrayView1<f64>,
-    data_exog: ArrayView2<f64>,
-    data_predict: ArrayView2<f64>,
-    var_type: Vec<&str>,
-    reg_type: &str,
-) -> Vec<f64> {
-    let n_predict = data_predict.len_of(Axis(0));
-    let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
-
-    for i in 0..n_predict {
-        let slice_predict = data_predict.slice(s![i, ..]);
-
-        let local_mean = match reg_type {
-            "loc_constant" => {
-                est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())
-            }
-            "loc_linear" => {
-                est_loc_linear(&bw, data_endog, data_exog, slice_predict, var_type.clone())
-            }
-            _ => panic!("Invalid regression type"),
-        };
-        local_means.push(local_mean);
+impl KernelReg {
+    pub fn new(bw: Vec<f64>, var_type: Vec<String>, reg_type: String) -> KernelReg {
+        KernelReg {
+            bw,
+            var_type,
+            reg_type,
+        }
     }
 
-    local_means
+    pub fn fit_predict(
+        &self,
+        data_endog: ArrayView1<f64>,
+        data_exog: ArrayView2<f64>,
+        data_predict: ArrayView2<f64>,
+    ) -> Vec<f64> {
+        let n_predict = data_predict.len_of(Axis(0));
+
+        let local_means: Vec<f64> = (0..n_predict)
+            .into_par_iter()
+            .map(|i| {
+                let slice_predict = data_predict.slice(s![i, ..]);
+
+                match self.reg_type.as_str() {
+                    "loc_constant" => est_loc_constant(
+                        &self.bw,
+                        data_endog,
+                        data_exog,
+                        slice_predict,
+                        self.var_type.clone(),
+                    ),
+                    "loc_linear" => est_loc_linear(
+                        &self.bw,
+                        data_endog,
+                        data_exog,
+                        slice_predict,
+                        self.var_type.clone(),
+                    ),
+                    _ => panic!("Invalid regression type"),
+                }
+            })
+            .collect();
+
+        local_means
+    }
 }
 
 pub fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {
@@ -222,6 +246,12 @@ fn exclude_index(array: &Array2<f64>, i: usize) -> Array2<f64> {
         .unwrap();
 
     output_array
+}
+
+fn mse(y_true: Array1<f64>, y_pred: Array1<f64>) -> f64 {
+    let n = y_true.len() as f64;
+    let mse = (y_true - y_pred).clone().mapv(|x| x.powf(2.0)).sum() / n;
+    mse
 }
 
 // Create a KernelReg struct

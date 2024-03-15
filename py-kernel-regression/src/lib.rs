@@ -10,7 +10,7 @@ pub fn est_loc_constant(
     data_endog: ArrayView1<f64>,
     data_exog: ArrayView2<f64>,
     data_predict: ArrayView1<f64>,
-    var_type: Vec<&str>,
+    var_type: Vec<String>,
 ) -> PyResult<f64> {
     let kernel_products = gpke(bw, data_exog, data_predict, var_type);
     let loc_num = (data_endog.to_owned() * kernel_products.view()).sum();
@@ -30,7 +30,7 @@ pub unsafe fn loc_constant_fit(
     let data_endog = data_endog.as_array();
     let data_exog = data_exog.as_array();
     let data_predict = data_predict.as_array();
-    let var_type: Vec<&str> = var_type.extract()?;
+    let var_type: Vec<String> = var_type.extract()?;
 
     let n_predict = data_predict.len_of(Axis(0));
     let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
@@ -50,7 +50,7 @@ pub fn est_loc_linear(
     data_endog: ArrayView1<f64>,
     data_exog: ArrayView2<f64>,
     data_predict: ArrayView1<f64>,
-    var_type: Vec<&str>,
+    var_type: Vec<String>,
 ) -> PyResult<f64> {
     let exog_shape = data_exog.shape();
     let kernel_products = gpke(bw, data_exog, data_predict, var_type);
@@ -123,48 +123,67 @@ pub fn est_loc_linear(
     Ok(est)
 }
 
-// Keep the loc_constant_fit for legacy reasons
-#[pyfunction]
-pub unsafe fn fit_predict(
-    _py: Python,
-    bw: &PyList,
-    data_endog: &PyArray1<f64>,
-    data_exog: &PyArray2<f64>,
-    data_predict: &PyArray2<f64>,
-    var_type: &PyList,
-    reg_type: Option<&PyString>,
-) -> PyResult<Vec<f64>> {
-    let bw: Vec<f64> = bw.extract()?;
-    let data_endog = data_endog.as_array();
-    let data_exog = data_exog.as_array();
-    let data_predict = data_predict.as_array();
-    let var_type: Vec<&str> = var_type.extract()?;
-    let reg_type = reg_type.unwrap_or(PyString::new(_py, "loc_constant"));
+#[pyclass]
+pub struct KernelReg {
+    bw: PyObject,
+    var_type: PyObject,
+    reg_type: PyObject,
+}
 
-    let n_predict = data_predict.len_of(Axis(0));
-    let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
+#[pymethods]
+impl KernelReg {
+    #[new]
+    pub fn new(bw: &PyAny, var_type: &PyAny, reg_type: &PyAny) -> PyResult<Self> {
+        let bw: &PyList = bw.extract()?;
+        let var_type: &PyList = var_type.extract()?;
+        let reg_type: &PyString = reg_type.extract()?;
 
-    for i in 0..n_predict {
-        let slice_predict = data_predict.slice(s![i, ..]);
-
-        let local_mean = match reg_type.to_str()? {
-            "loc_constant" => {
-                est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
-            }
-            "loc_linear" => {
-                est_loc_linear(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
-            }
-            _ => panic!("Invalid regression type"),
-        };
-        local_means.push(local_mean);
+        Ok(KernelReg {
+            bw: bw.into(),
+            var_type: var_type.into(),
+            reg_type: reg_type.into(),
+        })
     }
 
-    Ok(local_means)
+    pub unsafe fn fit_predict(
+        &self,
+        py: Python,
+        data_endog: &PyArray1<f64>,
+        data_exog: &PyArray2<f64>,
+        data_predict: &PyArray2<f64>,
+    ) -> PyResult<Vec<f64>> {
+        let bw: Vec<f64> = self.bw.extract(py)?;
+        let data_endog = data_endog.as_array();
+        let data_exog = data_exog.as_array();
+        let data_predict = data_predict.as_array();
+        let var_type: Vec<String> = self.var_type.extract(py)?;
+        let reg_type: String = self.reg_type.extract(py)?;
+
+        let n_predict = data_predict.len_of(Axis(0));
+        let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
+
+        for i in 0..n_predict {
+            let slice_predict = data_predict.slice(s![i, ..]);
+
+            let local_mean = match reg_type.as_str() {
+                "loc_constant" => {
+                    est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
+                }
+                "loc_linear" => {
+                    est_loc_linear(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
+                }
+                _ => panic!("Invalid regression type"),
+            };
+            local_means.push(local_mean);
+        }
+
+        Ok(local_means)
+    }
 }
 
 #[pymodule]
 fn py_kernel_regression(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(loc_constant_fit, m)?)?;
-    m.add_function(wrap_pyfunction!(fit_predict, m)?)?;
+    m.add_class::<KernelReg>()?;
     Ok(())
 }

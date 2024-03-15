@@ -1,5 +1,5 @@
 use ndarray::array;
-use rust_kernel_regression::kr::fit_predict;
+use rust_kernel_regression::kr::KernelReg;
 
 fn main() {
     let bw = vec![1.0, 0.2];
@@ -30,14 +30,14 @@ fn main() {
     //        var_type,
     //    );
     //
-    let output = fit_predict(
-        &bw,
-        y_train.view(),
-        x_train.view(),
-        x_new.view(),
-        var_type,
-        "loc_linear",
+    //
+    let kernel_reg = KernelReg::new(
+        vec![1.0, 0.2],
+        vec![String::from("c"), String::from("u")],
+        String::from("loc_linear"),
     );
+
+    let output = kernel_reg.fit_predict(y_train.view(), x_train.view(), x_new.view());
 
     println!("{:#?}", output);
 }

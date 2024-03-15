@@ -3,7 +3,8 @@ import pandas as pd
 from statsmodels.nonparametric._kernel_base import gpke
 from statsmodels.nonparametric.kernels import gaussian, aitchison_aitken
 from statsmodels.nonparametric.kernel_regression import KernelReg
-from py_kernel_regression import loc_constant_fit, fit_predict
+from py_kernel_regression import loc_constant_fit
+from py_kernel_regression import KernelReg as KR
 import time
 
 
@@ -16,7 +17,7 @@ Y_train = np.array([9.0, 9.0, 10.0, 3.0, 4.0])
 x_new = np.array([[1.0, 2.0], [2.2, 3.0], [2.6, 2.0]])
 
 # Set to a pretty large number to compare the performance
-# x_new = np.repeat(x_new, 1000, axis=0)
+x_new = np.repeat(x_new, 1000, axis=0)
 
 
 def main():
@@ -43,13 +44,13 @@ def main():
     print(f"Time taken with Python (loc linear fit): {delta} seconds")
 
     start_time = time.time()
-    ll_output = fit_predict(bw, Y_train, X_train, x_new, ["c", "u"], "loc_linear")
+    ll_output = KR(bw, ["c", "u"], "loc_linear").fit_predict(Y_train, X_train, x_new)
     end_time = time.time()
     delta = end_time - start_time
     print(f"Time taken with Rust (loc_linear_fit): {delta} seconds")
 
     start_time = time.time()
-    lc_output = fit_predict(bw, Y_train, X_train, x_new, ["c", "u"], "loc_constant")
+    lc_output = KR(bw, ["c", "u"], "loc_constant").fit_predict(Y_train, X_train, x_new)
     end_time = time.time()
     delta = end_time - start_time
     print(f"Time taken with Rust (loc_constant_fit): {delta} seconds")
