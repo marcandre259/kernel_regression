@@ -2,6 +2,7 @@ use ndarray::prelude::*;
 use numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
+use rayon::prelude::*;
 use rust_kernel_regression::kr::{gpke, mp_inverse};
 use std::f64::consts::PI;
 
@@ -160,22 +161,29 @@ impl KernelReg {
         let reg_type: String = self.reg_type.extract(py)?;
 
         let n_predict = data_predict.len_of(Axis(0));
-        let mut local_means: Vec<f64> = Vec::with_capacity(n_predict);
 
-        for i in 0..n_predict {
-            let slice_predict = data_predict.slice(s![i, ..]);
+        let local_means: Vec<f64> = (0..n_predict)
+            .into_par_iter()
+            .map(|i| {
+                let slice_predict = data_predict.slice(s![i, ..]);
 
-            let local_mean = match reg_type.as_str() {
-                "loc_constant" => {
-                    est_loc_constant(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
-                }
-                "loc_linear" => {
-                    est_loc_linear(&bw, data_endog, data_exog, slice_predict, var_type.clone())?
-                }
-                _ => panic!("Invalid regression type"),
-            };
-            local_means.push(local_mean);
-        }
+                let local_mean = match reg_type.as_str() {
+                    "loc_constant" => est_loc_constant(
+                        &bw,
+                        data_endog,
+                        data_exog,
+                        slice_predict,
+                        var_type.clone(),
+                    ),
+                    "loc_linear" => {
+                        est_loc_linear(&bw, data_endog, data_exog, slice_predict, var_type.clone())
+                    }
+                    _ => panic!("Invalid regression type"),
+                };
+
+                local_mean.unwrap_or_else(|err| panic!("Error: {:?}", err))
+            })
+            .collect::<Vec<f64>>();
 
         Ok(local_means)
     }

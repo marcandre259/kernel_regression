@@ -13,3 +13,4 @@ pyo3 = "0.20.3"
 ndarray = "0.15"
 numpy = "0.20"
 rust-kernel-regression = { path = "../rust-kernel-regression" }
+rayon = "1.9.0"

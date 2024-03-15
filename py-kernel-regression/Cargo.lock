@@ -885,6 +885,7 @@ dependencies = [
  "ndarray 0.15.6",
  "numpy",
  "pyo3",
+ "rayon",
  "rust-kernel-regression",
 ]
 
