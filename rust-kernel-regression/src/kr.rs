@@ -1,4 +1,4 @@
-use ndarray::{prelude::*, stack};
+use ndarray::{concatenate, prelude::*, stack};
 use ndarray_linalg::SVD;
 use rayon::prelude::*;
 use std::f64::consts::PI;
@@ -218,6 +218,49 @@ impl KernelReg {
 
         local_means
     }
+
+    pub fn leave_one_out<F>(
+        &self,
+        data_endog: ArrayView1<f64>,
+        data_exog: ArrayView2<f64>,
+        loss_function: F,
+    ) -> f64
+    where
+        F: Fn(ArrayView1<f64>, ArrayView1<f64>) -> f64,
+    {
+        let n_predict = data_exog.len_of(Axis(0));
+
+        let local_means: Vec<f64> = (0..n_predict)
+            .into_par_iter()
+            .map(|i| {
+                let slice_predict = data_exog.slice(s![i, ..]);
+                let data_exog_inot = data_exog.exclude(i);
+                let data_endog_inot = data_endog.exclude(i);
+
+                match self.reg_type.as_str() {
+                    "loc_constant" => est_loc_constant(
+                        &self.bw,
+                        data_endog_inot.view(),
+                        data_exog_inot.view(),
+                        slice_predict,
+                        self.var_type.clone(),
+                    ),
+                    "loc_linear" => est_loc_linear(
+                        &self.bw,
+                        data_endog_inot.view(),
+                        data_exog_inot.view(),
+                        slice_predict,
+                        self.var_type.clone(),
+                    ),
+                    _ => panic!("Invalid regression type"),
+                }
+            })
+            .collect();
+
+        let loss = loss_function(data_endog, Array1::from(local_means).view());
+
+        loss
+    }
 }
 
 pub fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {
@@ -236,22 +279,84 @@ pub fn mp_inverse(m: &Array2<f64>) -> Array2<f64> {
     m_pinv
 }
 
-fn exclude_index(array: &Array2<f64>, i: usize) -> Array2<f64> {
-    let start = array.slice(s![0..i, ..]);
-    let end = array.slice(s![(i + 1).., ..]);
+// Implement exclude_index for Array1 and Array2
+pub trait ExcludeIndex {
+    type Output;
 
-    let output_array = stack(Axis(0), &[start, end]).unwrap();
-    let output_array = output_array
-        .into_shape((array.shape()[0] - 1, array.shape()[1]))
-        .unwrap();
-
-    output_array
+    fn exclude(&self, i: usize) -> Self::Output;
 }
 
-fn mse(y_true: Array1<f64>, y_pred: Array1<f64>) -> f64 {
+impl ExcludeIndex for ArrayView1<'_, f64> {
+    type Output = Array1<f64>;
+
+    fn exclude(&self, i: usize) -> Self::Output {
+        let n_obs = self.shape()[0];
+
+        let output_array = if i == 0 {
+            self.slice(s![1..]).to_owned()
+        } else if i == n_obs - 1 {
+            self.slice(s![0..(n_obs - 1)]).to_owned()
+        } else {
+            let start = self.slice(s![0..i]);
+            let end = self.slice(s![(i + 1)..]);
+
+            let output_array = concatenate(Axis(0), &[start, end])
+                .unwrap()
+                .into_dimensionality::<Ix1>()
+                .unwrap();
+            output_array
+        };
+
+        output_array
+    }
+}
+
+impl ExcludeIndex for ArrayView2<'_, f64> {
+    type Output = Array2<f64>;
+
+    fn exclude(&self, i: usize) -> Self::Output {
+        // Handle edges cases like i==0
+        let n_obs = self.shape()[0];
+
+        let output_array = if i == 0 {
+            self.slice(s![1.., ..])
+                .into_dimensionality::<Ix2>()
+                .unwrap()
+                .to_owned()
+        } else if i == n_obs - 1 {
+            self.slice(s![0..(n_obs - 1), ..])
+                .into_dimensionality::<Ix2>()
+                .unwrap()
+                .to_owned()
+        } else {
+            let start = self
+                .slice(s![0..i, ..])
+                .into_dimensionality::<Ix2>()
+                .unwrap()
+                .to_owned();
+
+            let end = self
+                .slice(s![(i + 1).., ..])
+                .into_dimensionality::<Ix2>()
+                .unwrap()
+                .to_owned();
+
+            concatenate(Axis(0), &[start.view(), end.view()]).unwrap()
+        };
+
+        output_array
+    }
+}
+
+pub fn rmse(y_true: ArrayView1<f64>, y_pred: ArrayView1<f64>) -> f64 {
     let n = y_true.len() as f64;
-    let mse = (y_true - y_pred).clone().mapv(|x| x.powf(2.0)).sum() / n;
-    mse
+    let mse = (y_true.to_owned() - y_pred.to_owned())
+        .mapv(|x| x.powf(2.0))
+        .sum()
+        / n;
+    let rmse = mse.sqrt();
+
+    rmse
 }
 
 // Create a KernelReg struct
