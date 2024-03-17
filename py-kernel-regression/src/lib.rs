@@ -3,8 +3,7 @@ use numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
 use rayon::prelude::*;
-use rust_kernel_regression::kr::{gpke, mp_inverse};
-use std::f64::consts::PI;
+use rust_kernel_regression::kr::{gpke, mp_inverse, rmse, ExcludeIndex};
 
 pub fn est_loc_constant(
     bw: &Vec<f64>,
@@ -186,6 +185,59 @@ impl KernelReg {
             .collect::<Vec<f64>>();
 
         Ok(local_means)
+    }
+
+    pub unsafe fn leave_one_out(
+        &self,
+        py: Python,
+        data_endog: &PyArray1<f64>,
+        data_exog: &PyArray2<f64>,
+        loss_function: &PyString,
+    ) -> PyResult<f64> {
+        let bw: Vec<f64> = self.bw.extract(py)?;
+        let data_endog = data_endog.as_array();
+        let data_exog = data_exog.as_array();
+        let var_type: Vec<String> = self.var_type.extract(py)?;
+        let reg_type: String = self.reg_type.extract(py)?;
+        let loss_function: String = loss_function.to_string();
+
+        let n_predict = data_exog.len_of(Axis(0));
+
+        let local_means: Vec<f64> = (0..n_predict)
+            .into_par_iter()
+            .map(|i| {
+                let slice_predict = data_exog.slice(s![i, ..]);
+                let data_exog_inot = data_exog.exclude(i);
+                let data_endog_inot = data_endog.exclude(i);
+
+                let local_mean = match reg_type.as_str() {
+                    "loc_constant" => est_loc_constant(
+                        &bw,
+                        data_endog_inot.view(),
+                        data_exog_inot.view(),
+                        slice_predict,
+                        var_type.clone(),
+                    ),
+                    "loc_linear" => est_loc_linear(
+                        &bw,
+                        data_endog_inot.view(),
+                        data_exog_inot.view(),
+                        slice_predict,
+                        var_type.clone(),
+                    ),
+                    _ => panic!("Invalid regression type"),
+                };
+
+                local_mean.unwrap_or_else(|err| panic!("Error: {:?}", err))
+            })
+            .collect::<Vec<f64>>();
+
+        let loss = match loss_function.as_str() {
+            "rmse" => Some(rmse(data_endog, Array1::from(local_means).view())),
+            _ => None,
+        };
+
+        Ok(loss.unwrap())
     }
 }
 

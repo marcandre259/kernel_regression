@@ -50,7 +50,7 @@ fn main() {
         String::from("loc_constant"),
     );
 
-    let output = kernel_reg.leave_one_out(y_train.view(), x_train.view(), rmse);
+    let output = kernel_reg.leave_one_out(y_train.view(), x_train.view(), String::from("rmse"));
 
     //    let output = mse(y_train.view(), y_train.view());
 

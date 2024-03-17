@@ -1,4 +1,4 @@
-use ndarray::{concatenate, prelude::*, stack};
+use ndarray::{concatenate, prelude::*};
 use ndarray_linalg::SVD;
 use rayon::prelude::*;
 use std::f64::consts::PI;
@@ -219,15 +219,12 @@ impl KernelReg {
         local_means
     }
 
-    pub fn leave_one_out<F>(
+    pub fn leave_one_out(
         &self,
         data_endog: ArrayView1<f64>,
         data_exog: ArrayView2<f64>,
-        loss_function: F,
-    ) -> f64
-    where
-        F: Fn(ArrayView1<f64>, ArrayView1<f64>) -> f64,
-    {
+        loss_function: String,
+    ) -> f64 {
         let n_predict = data_exog.len_of(Axis(0));
 
         let local_means: Vec<f64> = (0..n_predict)
@@ -257,9 +254,12 @@ impl KernelReg {
             })
             .collect();
 
-        let loss = loss_function(data_endog, Array1::from(local_means).view());
+        let loss = match loss_function.as_str() {
+            "rmse" => Some(rmse(data_endog, Array1::from(local_means).view())),
+            _ => None,
+        };
 
-        loss
+        loss.unwrap()
     }
 }
 
